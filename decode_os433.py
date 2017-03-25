@@ -9,9 +9,12 @@ Licensed under the terms of the GNU GPLv3+
 
 from gnuradio import gr
 import gr_queue
-from gnuradio import blks2
+from gnuradio.analog.am_demod import am_demod_cf
+from gnuradio.filter.rational_resampler import rational_resampler_fff
+from gnuradio.filter import firdes
+from gnuradio.filter import freq_xlating_fir_filter_ccc
+from gnuradio.blocks import message_sink
 from gnuradio import audio
-from gnuradio.gr import firdes
 import osmosdr
 
 # Sensors transmit on 433.9MHz
@@ -30,7 +33,7 @@ class rtlsdr_am_stream(gr.top_block):
 	Optionally plays the audio out the speaker.
 	"""
 
-	def __init__(self, center_freq, offset_freq, decimate_am=1, play_audio=False):
+	def __init__(self, center_freq, offset_freq, decimate_am=1, play_audio=False, source=""):
 		"""Configure the RTL-SDR and GNU Radio"""
 		super(rtlsdr_am_stream, self).__init__()
 		
@@ -39,20 +42,20 @@ class rtlsdr_am_stream(gr.top_block):
 		output_rate = audio_rate / float(decimate_am)
 		self.rate = output_rate
 
-		self.osmosdr_source = osmosdr.source_c("")
+		self.osmosdr_source = osmosdr.source(source)
 		self.osmosdr_source.set_center_freq(freq)
 		self.osmosdr_source.set_sample_rate(device_rate)
 
 		taps = firdes.low_pass(1, device_rate, 40000, 5000, firdes.WIN_HAMMING, 6.76)
-		self.freq_filter = gr.freq_xlating_fir_filter_ccc(25, taps, -freq_offs, device_rate)
+		self.freq_filter = freq_xlating_fir_filter_ccc(25, taps, -freq_offs, device_rate)
 
-		self.am_demod = blks2.am_demod_cf(
+		self.am_demod = am_demod_cf(
 			channel_rate=audio_rate,
 			audio_decim=1,
 			audio_pass=5000,
 			audio_stop=5500,
 		)
-		self.resampler = blks2.rational_resampler_fff(
+		self.resampler = rational_resampler_fff(
 			interpolation=1,
 			decimation=decimate_am,
 		)
@@ -210,6 +213,8 @@ if __name__ == '__main__':
 		metavar='NAME', help='Log readings to <NAME><CHANNEL>.csv')
 	parser.add_option('-a', '--audio', action='store_true', dest='audio',
 		help="Play AM-demodulated signal to the speakers")
+	parser.add_option('-s', '--source', type='string', dest='source',
+		help="SDR Source to use")
 	(options, args) = parser.parse_args(sys.argv[1:])
 	
 	logfiles = {}
@@ -217,7 +222,8 @@ if __name__ == '__main__':
 		for channel in range(1, 3+1):
 			logfiles[channel] = open("{0}{1}.csv".format(options.log, channel), 'at')
 
-	stream = rtlsdr_am_stream(freq, freq_offs, decimate_am=2, play_audio=options.audio)
+	source = options.source if options.source else ""
+	stream = rtlsdr_am_stream(freq, freq_offs, decimate_am=2, play_audio=options.audio, source=source)
 	stream.start()
 	unit = 'F'
 	for packet in decode_osv1(stream):

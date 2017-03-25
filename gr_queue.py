@@ -23,6 +23,7 @@
 
 
 from gnuradio import gr
+from gnuradio.blocks import message_sink as gr_message_sink
 import gnuradio.gr.gr_threading as _threading
 import numpy
 
@@ -77,7 +78,7 @@ class _queue_sink_base(gr.hier_block2):
 		)
 		#create message sink
 		self._msgq = gr.msg_queue(4)
-		message_sink = gr.message_sink(self._item_size*self._vlen, self._msgq, False) #False -> blocking
+		message_sink = gr_message_sink(self._item_size*self._vlen, self._msgq, False) #False -> blocking
 		#connect
 		self.connect(self, message_sink)
 
